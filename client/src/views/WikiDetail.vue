@@ -16,7 +16,6 @@
         <div>
           <div class="wiki-meta">
             <span class="badge badge-blue">{{ wiki.category }}</span>
-            <span v-if="wiki.week" class="badge badge-green">{{ wiki.week }}주차</span>
           </div>
           <h1>{{ wiki.title }}</h1>
           <p class="wiki-summary">{{ wiki.summary }}</p>

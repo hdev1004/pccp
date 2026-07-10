@@ -156,7 +156,6 @@
               <div class="wiki-icon" :style="{ background: item.color + '15', color: item.color }">
                 <component :is="getIcon(item.icon)" :size="20" />
               </div>
-              <span v-if="item.week" class="badge badge-blue">{{ item.week }}주차</span>
             </div>
             <h3 class="wiki-title">{{ item.title }}</h3>
             <p class="wiki-summary">{{ item.summary }}</p>
