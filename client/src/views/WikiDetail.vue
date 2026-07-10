@@ -202,7 +202,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import api from '../api';
 import CodeBlock from '../components/CodeBlock.vue';
@@ -440,7 +440,7 @@ async function askAI() {
   question.value = '';
 
   // 질문을 먼저 표시 (답변은 아직 비어있고 streaming 상태)
-  const conv = { question: q, answer: '', streaming: true };
+  const conv = reactive({ question: q, answer: '', streaming: true });
   conversations.value.push(conv);
 
   try {

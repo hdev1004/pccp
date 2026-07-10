@@ -1,5 +1,20 @@
 <template>
-  <div>
+  <!-- 스켈레톤 -->
+  <div v-if="pageLoading">
+    <div class="sk" style="width:100px;height:22px;margin-bottom:20px"></div>
+    <div class="sk" style="width:100%;height:44px;border-radius:14px;margin-bottom:24px"></div>
+    <div class="sk-card" v-for="i in 4" :key="i">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;gap:12px;align-items:center">
+          <div class="sk" style="width:50px;height:14px"></div>
+          <div class="sk" style="width:120px;height:15px"></div>
+        </div>
+        <div class="sk" style="width:40px;height:14px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="fade-in">
     <div class="page-header">
       <h1>문제 풀이</h1>
     </div>
@@ -175,6 +190,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+const pageLoading = ref(true);
 import api from '../api';
 import CustomSelect from '../components/Select.vue';
 import {
@@ -244,6 +260,8 @@ async function loadProblems() {
     aiProblems.value = aiRes.data;
   } catch (err) {
     console.error('문제 목록 로드 실패:', err);
+  } finally {
+    pageLoading.value = false;
   }
 }
 

@@ -197,6 +197,102 @@ router.patch('/:id/memo', authMiddleware, async (req, res) => {
   }
 });
 
+// AI 코드 리뷰 (SSE 스트리밍)
+router.post('/:id/review', authMiddleware, async (req, res) => {
+  const { code, language } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ message: '코드가 필요합니다.' });
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ message: 'OPENAI_API_KEY가 설정되지 않았습니다.' });
+  }
+
+  try {
+    // 문제 정보 가져오기
+    const problem = await pool.query('SELECT title, topic, week FROM problems WHERE id = $1', [req.params.id]);
+    const info = problem.rows[0] || {};
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const prompt = `당신은 코딩 테스트 전문 리뷰어입니다. 초보자도 이해할 수 있게 친절하게 리뷰해주세요.
+
+## 문제 정보
+- 제목: ${info.title || '알 수 없음'}
+- 유형: ${info.topic || '알 수 없음'}
+- 언어: ${language || 'python'}
+
+## 제출된 코드
+\`\`\`${language || 'python'}
+${code}
+\`\`\`
+
+## 리뷰 항목 (아래 순서대로 답변)
+### 1. 시간복잡도 분석
+- 이 코드의 시간복잡도를 Big-O로 분석해주세요
+- 왜 그런 복잡도인지 핵심 반복문/재귀를 짚어 설명
+
+### 2. 잘한 점
+- 코드에서 좋은 부분을 1~2가지 언급
+
+### 3. 개선 포인트
+- 더 효율적으로 바꿀 수 있는 부분이 있다면 구체적으로 제안
+- 가독성, 변수명, 코드 스타일 개선점
+
+### 4. 한 줄 총평
+- 전체적인 평가를 한 줄로
+
+답변 규칙:
+- 한국어로 답변
+- 마크다운 형식
+- 초보자 눈높이로 비유를 들어 설명
+- 코드 예시가 필요하면 포함`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 1500,
+      stream: true,
+    });
+
+    let fullReview = '';
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content;
+      if (content) {
+        fullReview += content;
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    // 리뷰 결과를 DB에 저장
+    if (fullReview) {
+      await pool.query(
+        'UPDATE submissions SET review = $1 WHERE problem_id = $2 AND user_id = $3',
+        [fullReview, req.params.id, req.user.id]
+      );
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    console.error('AI 코드 리뷰 오류:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: `AI 리뷰에 실패했습니다: ${err.message}` });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    }
+  }
+});
+
 // 내 풀이 삭제
 router.delete('/:id/submit', authMiddleware, async (req, res) => {
   try {

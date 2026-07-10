@@ -1,5 +1,27 @@
 <template>
-  <div>
+  <!-- 스켈레톤 -->
+  <div v-if="loading">
+    <div style="margin-bottom:28px">
+      <div class="sk" style="width:220px;height:22px;margin-bottom:8px"></div>
+      <div class="sk" style="width:180px;height:14px"></div>
+    </div>
+    <div class="stat-grid">
+      <div class="sk-card" v-for="i in 3" :key="i" style="margin-top:0!important">
+        <div class="sk" style="width:100px;height:13px;margin-bottom:14px"></div>
+        <div class="sk" style="width:50px;height:24px"></div>
+      </div>
+    </div>
+    <div class="sk-card">
+      <div class="sk sk-title" style="width:120px"></div>
+      <div class="sk sk-line" style="width:100%" v-for="i in 3" :key="'p'+i"></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk sk-title" style="width:140px"></div>
+      <div class="sk sk-line" style="width:100%" v-for="i in 2" :key="'q'+i"></div>
+    </div>
+  </div>
+
+  <div v-else class="fade-in">
     <div class="greeting">
       <div class="greeting-title">
         <h1>안녕하세요, {{ auth.user?.nickname }}님</h1>
@@ -53,7 +75,7 @@
         >
           <div>
             <p class="list-title">{{ problem.title }}</p>
-            <p class="list-sub">{{ problem.week }}주차 · {{ problem.created_by_nickname }}</p>
+            <p class="list-sub">{{ problem.source === 'ai' ? 'AI 추천' : problem.week + '주차' }} · {{ problem.created_by_nickname || '' }}</p>
           </div>
           <span class="badge badge-blue">{{ problem.submission_count }}명 제출</span>
         </router-link>
@@ -95,6 +117,8 @@ import { useAuthStore } from '../stores/auth';
 import api from '../api';
 import { Hand, FileText, Send, Brain, ChevronRight } from '@lucide/vue';
 
+const loading = ref(true);
+
 const auth = useAuthStore();
 const stats = ref({ problemCount: 0, mySubmissions: 0, quizCompleted: false });
 const recentProblems = ref([]);
@@ -109,16 +133,26 @@ onMounted(async () => {
     recentProblems.value = problemsRes.data.slice(0, 5);
     recentQuizzes.value = quizzesRes.data.slice(0, 3);
 
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 1);
-    const currentWeek = Math.ceil((now - start) / (7 * 24 * 60 * 60 * 1000));
-    const thisWeekProblems = problemsRes.data.filter(p => p.week === currentWeek);
+    // 가장 최근 주차의 퀴즈/문제 기준으로 표시
+    const latestQuizWeek = quizzesRes.data.length > 0
+      ? Math.max(...quizzesRes.data.map(q => q.week))
+      : null;
+    const latestProblemWeek = problemsRes.data.length > 0
+      ? Math.max(...problemsRes.data.map(p => p.week))
+      : 1;
+
+    const thisWeekProblems = problemsRes.data.filter(p => p.week === latestProblemWeek);
     stats.value.problemCount = thisWeekProblems.length;
     stats.value.mySubmissions = thisWeekProblems.filter(p => p.submission_count > 0).length;
-    const thisWeekQuiz = quizzesRes.data.find(q => q.week === currentWeek);
-    stats.value.quizCompleted = thisWeekQuiz?.completed || false;
+
+    const latestQuiz = latestQuizWeek !== null
+      ? quizzesRes.data.find(q => q.week === latestQuizWeek)
+      : null;
+    stats.value.quizCompleted = latestQuiz?.completed || false;
   } catch (err) {
     console.error('대시보드 데이터 로드 실패:', err);
+  } finally {
+    loading.value = false;
   }
 });
 </script>

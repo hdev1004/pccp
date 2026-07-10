@@ -1,5 +1,22 @@
 <template>
-  <div>
+  <!-- 스켈레톤 -->
+  <div v-if="loading">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div class="sk" style="width:160px;height:22px"></div>
+      <div class="sk" style="width:180px;height:36px;border-radius:12px"></div>
+    </div>
+    <div v-for="i in 3" :key="i" class="sk-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="sk" style="width:140px;height:16px;margin-bottom:6px"></div>
+          <div class="sk" style="width:100px;height:13px"></div>
+        </div>
+        <div class="sk" style="width:48px;height:22px;border-radius:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="fade-in">
     <div class="page-header">
       <h1>시간복잡도 퀴즈</h1>
       <div class="header-actions">
@@ -68,6 +85,8 @@ import { ref, onMounted } from 'vue';
 import api from '../api';
 import { Sparkles, AlertCircle, CheckCircle, Brain, ChevronRight, Trash2 } from '@lucide/vue';
 
+const loading = ref(true);
+
 const quizzes = ref([]);
 const generating = ref(false);
 const error = ref('');
@@ -83,12 +102,13 @@ async function loadQuizzes() {
   try {
     const { data } = await api.get('/quiz');
     quizzes.value = data;
-    // 다음 주차 자동 계산
     if (data.length > 0) {
       targetWeek.value = Math.max(...data.map(q => q.week)) + 1;
     }
   } catch (err) {
     console.error('퀴즈 목록 로드 실패:', err);
+  } finally {
+    loading.value = false;
   }
 }
 

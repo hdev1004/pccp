@@ -72,6 +72,7 @@ async function initDatabase() {
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS topic VARCHAR(100);
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'curriculum';
         ALTER TABLE ${schema}.submissions ADD COLUMN IF NOT EXISTS memo TEXT DEFAULT '';
+        ALTER TABLE ${schema}.submissions ADD COLUMN IF NOT EXISTS review TEXT DEFAULT NULL;
         -- 소프트 삭제용 컬럼
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
         ALTER TABLE ${schema}.weekly_quizzes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
