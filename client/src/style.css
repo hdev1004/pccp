@@ -1,0 +1,201 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+:root {
+  --toss-blue: #3182f6;
+  --toss-blue-hover: #1b64da;
+  --toss-red: #f04452;
+  --toss-green: #30b06e;
+  --toss-yellow: #f59e0b;
+  --toss-gray-50: #f9fafb;
+  --toss-gray-100: #f2f4f6;
+  --toss-gray-200: #e5e8eb;
+  --toss-gray-300: #d1d6db;
+  --toss-gray-400: #b0b8c1;
+  --toss-gray-500: #8b95a1;
+  --toss-gray-600: #6b7684;
+  --toss-gray-700: #4e5968;
+  --toss-gray-800: #333d4b;
+  --toss-gray-900: #191f28;
+  --max-width: 960px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background-color: var(--toss-gray-50);
+  color: var(--toss-gray-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* 레이아웃 */
+.page-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* 카드 */
+.card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+  padding: 24px;
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+/* 버튼 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--toss-blue);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--toss-blue-hover);
+}
+
+.btn-secondary {
+  background: var(--toss-gray-100);
+  color: var(--toss-gray-700);
+}
+
+.btn-secondary:hover {
+  background: var(--toss-gray-200);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 입력 */
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--toss-gray-200);
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--toss-gray-50);
+  color: var(--toss-gray-900);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input:focus {
+  border-color: var(--toss-blue);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(49,130,246,0.08);
+}
+
+.input::placeholder {
+  color: var(--toss-gray-400);
+}
+
+/* 뱃지 */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-blue {
+  background: rgba(49,130,246,0.1);
+  color: var(--toss-blue);
+}
+
+.badge-green {
+  background: rgba(48,176,110,0.1);
+  color: var(--toss-green);
+}
+
+.badge-red {
+  background: rgba(240,68,82,0.1);
+  color: var(--toss-red);
+}
+
+/* 그리드 */
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 코드 블록 */
+.code-block {
+  background: var(--toss-gray-900);
+  color: #86efac;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.6;
+}
+
+/* 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.modal-card {
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
