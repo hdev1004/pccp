@@ -17,6 +17,10 @@
             <FileCode :size="16" />
             <span>문제 풀이</span>
           </router-link>
+          <router-link to="/wiki" class="nav-link" :class="{ active: $route.path.startsWith('/wiki') }">
+            <BookOpen :size="16" />
+            <span>알고리즘 위키</span>
+          </router-link>
           <router-link to="/quiz" class="nav-link" :class="{ active: $route.path.startsWith('/quiz') }">
             <Brain :size="16" />
             <span>시간복잡도 퀴즈</span>
@@ -40,7 +44,7 @@
 <script setup>
 import { useAuthStore } from '../stores/auth';
 import { useRouter } from 'vue-router';
-import { Code, LayoutDashboard, FileCode, Brain, User, LogOut } from '@lucide/vue';
+import { Code, LayoutDashboard, FileCode, BookOpen, Brain, User, LogOut } from '@lucide/vue';
 
 const auth = useAuthStore();
 const router = useRouter();

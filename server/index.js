@@ -7,6 +7,7 @@ const { startScheduler } = require('./scheduler/quizGenerator');
 const authRoutes = require('./routes/auth');
 const problemRoutes = require('./routes/problems');
 const quizRoutes = require('./routes/quiz');
+const wikiRoutes = require('./routes/wiki');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,6 +19,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/problems', problemRoutes);
 app.use('/api/quiz', quizRoutes);
+app.use('/api/wiki', wikiRoutes);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

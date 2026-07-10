@@ -162,6 +162,7 @@ onMounted(async () => {
   min-height: 100px;
   display: flex;
   flex-direction: column;
+  margin-top: 0 !important;
   justify-content: space-between;
 }
 

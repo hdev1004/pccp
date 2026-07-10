@@ -72,8 +72,24 @@ async function initDatabase() {
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS topic VARCHAR(100);
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'curriculum';
         ALTER TABLE ${schema}.submissions ADD COLUMN IF NOT EXISTS memo TEXT DEFAULT '';
+        -- 소프트 삭제용 컬럼
+        ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
+        ALTER TABLE ${schema}.weekly_quizzes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
       EXCEPTION WHEN others THEN NULL;
       END $$;
+    `);
+
+    // 소프트 삭제 대응: week UNIQUE 제약조건을 partial unique index로 교체
+    // (deleted_at IS NULL인 행만 week 중복 검사)
+    await client.query(`
+      DO $$ BEGIN
+        ALTER TABLE ${schema}.weekly_quizzes DROP CONSTRAINT IF EXISTS weekly_quizzes_week_key;
+      EXCEPTION WHEN others THEN NULL;
+      END $$;
+    `);
+    await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS weekly_quizzes_week_active_idx
+      ON ${schema}.weekly_quizzes (week) WHERE deleted_at IS NULL;
     `);
 
     // 기본 계정 생성 (admin / admin1234)

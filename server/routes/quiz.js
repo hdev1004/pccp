@@ -5,9 +5,9 @@ const { generateQuiz } = require('../scheduler/quizGenerator');
 
 const router = express.Router();
 
-// 다음 퀴즈 주차 계산 (기존 퀴즈 중 가장 큰 week + 1)
+// 다음 퀴즈 주차 계산 (삭제되지 않은 퀴즈 중 가장 큰 week + 1)
 async function getNextWeek() {
-  const result = await pool.query('SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes');
+  const result = await pool.query('SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes WHERE deleted_at IS NULL');
   return result.rows[0].max_week + 1;
 }
 
@@ -17,12 +17,11 @@ router.post('/generate', authMiddleware, async (req, res) => {
     const { week: requestedWeek } = req.body;
     const week = requestedWeek || await getNextWeek();
 
-    // 해당 주차에 이미 퀴즈가 있으면 삭제 후 재생성
+    // 해당 주차에 이미 퀴즈가 있으면 소프트 삭제 후 재생성 (기존 결과 보존)
     let overwritten = false;
-    const existing = await pool.query('SELECT id FROM weekly_quizzes WHERE week = $1', [week]);
+    const existing = await pool.query('SELECT id FROM weekly_quizzes WHERE week = $1 AND deleted_at IS NULL', [week]);
     if (existing.rows.length > 0) {
-      await pool.query('DELETE FROM quiz_results WHERE quiz_id = $1', [existing.rows[0].id]);
-      await pool.query('DELETE FROM weekly_quizzes WHERE id = $1', [existing.rows[0].id]);
+      await pool.query('UPDATE weekly_quizzes SET deleted_at = NOW() WHERE id = $1', [existing.rows[0].id]);
       overwritten = true;
     }
 
@@ -42,12 +41,32 @@ router.get('/', authMiddleware, async (req, res) => {
         (SELECT COUNT(*) FROM quiz_results qr WHERE qr.quiz_id = wq.id) as participant_count,
         EXISTS(SELECT 1 FROM quiz_results qr WHERE qr.quiz_id = wq.id AND qr.user_id = $1) as completed
        FROM weekly_quizzes wq
+       WHERE wq.deleted_at IS NULL
        ORDER BY wq.week DESC`,
       [req.user.id]
     );
     res.json(result.rows);
   } catch (err) {
     console.error('퀴즈 목록 오류:', err);
+    res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// 퀴즈 삭제 — 소프트 삭제 (퀴즈 결과/점수 보존)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE weekly_quizzes SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id',
+      [req.params.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
+    }
+
+    res.json({ message: '퀴즈가 삭제되었습니다.' });
+  } catch (err) {
+    console.error('퀴즈 삭제 오류:', err);
     res.status(500).json({ message: '서버 오류가 발생했습니다.' });
   }
 });

@@ -15,7 +15,7 @@ router.get('/', authMiddleware, async (req, res) => {
         (SELECT COUNT(*) FROM submissions s WHERE s.problem_id = p.id) as submission_count
       FROM problems p
       LEFT JOIN users u ON p.created_by = u.id
-      WHERE 1=1
+      WHERE p.deleted_at IS NULL
     `;
     const params = [];
     let idx = 1;
@@ -128,7 +128,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const problem = await pool.query(
       `SELECT p.*, u.nickname as created_by_nickname
        FROM problems p LEFT JOIN users u ON p.created_by = u.id
-       WHERE p.id = $1`,
+       WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [req.params.id]
     );
 
@@ -212,6 +212,28 @@ router.delete('/:id/submit', authMiddleware, async (req, res) => {
     res.json({ message: '풀이가 삭제되었습니다.' });
   } catch (err) {
     console.error('풀이 삭제 오류:', err);
+    res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+  }
+});
+
+// AI 추천 문제 삭제 — 소프트 삭제 (제출 코드 보존)
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const problem = await pool.query('SELECT * FROM problems WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
+    if (problem.rows.length === 0) {
+      return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
+    }
+
+    if (problem.rows[0].source === 'curriculum') {
+      return res.status(403).json({ message: '커리큘럼 문제는 삭제할 수 없습니다.' });
+    }
+
+    // 소프트 삭제 — submissions(제출 코드)는 그대로 보존
+    await pool.query('UPDATE problems SET deleted_at = NOW() WHERE id = $1', [req.params.id]);
+
+    res.json({ message: '문제가 삭제되었습니다.' });
+  } catch (err) {
+    console.error('문제 삭제 오류:', err);
     res.status(500).json({ message: '서버 오류가 발생했습니다.' });
   }
 });

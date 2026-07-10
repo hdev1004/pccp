@@ -33,6 +33,18 @@ const routes = [
     meta: { auth: true },
   },
   {
+    path: '/wiki',
+    name: 'Wiki',
+    component: () => import('../views/Wiki.vue'),
+    meta: { auth: true },
+  },
+  {
+    path: '/wiki/:id',
+    name: 'WikiDetail',
+    component: () => import('../views/WikiDetail.vue'),
+    meta: { auth: true },
+  },
+  {
     path: '/quiz',
     name: 'QuizList',
     component: () => import('../views/QuizList.vue'),

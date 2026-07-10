@@ -2,10 +2,16 @@
   <div>
     <div class="page-header">
       <h1>시간복잡도 퀴즈</h1>
-      <button @click="generateQuiz" class="btn btn-secondary" :disabled="generating">
-        <Sparkles :size="15" />
-        {{ generating ? '생성 중...' : '퀴즈 생성' }}
-      </button>
+      <div class="header-actions">
+        <div class="week-selector">
+          <label>주차:</label>
+          <input v-model.number="targetWeek" type="number" min="1" class="week-input" />
+        </div>
+        <button @click="handleGenerate" class="btn btn-secondary" :disabled="generating">
+          <Sparkles :size="15" />
+          {{ generating ? '생성 중...' : '퀴즈 생성' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="successMsg" class="success-banner">
@@ -20,26 +26,39 @@
 
     <div v-if="quizzes.length === 0" class="card empty">아직 생성된 퀴즈가 없습니다</div>
     <div v-else class="quiz-list">
-      <router-link
-        v-for="quiz in quizzes"
-        :key="quiz.id"
-        :to="`/quiz/${quiz.id}`"
-        class="card quiz-item"
-      >
-        <div class="quiz-info">
-          <div class="quiz-title-row">
-            <Brain :size="18" color="var(--toss-blue)" />
-            <h3>{{ quiz.week }}주차 퀴즈</h3>
+      <div v-for="quiz in quizzes" :key="quiz.id" class="card quiz-item">
+        <router-link :to="`/quiz/${quiz.id}`" class="quiz-link">
+          <div class="quiz-info">
+            <div class="quiz-title-row">
+              <Brain :size="18" color="var(--toss-blue)" />
+              <h3>{{ quiz.week }}주차 퀴즈</h3>
+            </div>
+            <p class="quiz-meta">{{ formatDate(quiz.created_at) }} · {{ quiz.participant_count }}명 참여</p>
           </div>
-          <p class="quiz-meta">{{ formatDate(quiz.created_at) }} · {{ quiz.participant_count }}명 참여</p>
+          <div class="quiz-status">
+            <span class="badge" :class="quiz.completed ? 'badge-green' : 'badge-blue'">
+              {{ quiz.completed ? '완료' : '풀기' }}
+            </span>
+          </div>
+        </router-link>
+        <button @click.stop="handleDelete(quiz)" class="delete-btn" title="삭제">
+          <Trash2 :size="14" />
+        </button>
+      </div>
+    </div>
+
+    <!-- 확인 모달 -->
+    <div v-if="confirmModal" class="modal-overlay" @click.self="confirmModal = null">
+      <div class="modal-card">
+        <h3>{{ confirmModal.title }}</h3>
+        <p>{{ confirmModal.message }}</p>
+        <div class="modal-actions">
+          <button @click="confirmModal = null" class="btn btn-secondary">취소</button>
+          <button @click="confirmModal.action()" class="btn" :class="confirmModal.danger ? 'btn-danger' : 'btn-primary'">
+            {{ confirmModal.confirmText }}
+          </button>
         </div>
-        <div class="quiz-right">
-          <span class="badge" :class="quiz.completed ? 'badge-green' : 'badge-blue'">
-            {{ quiz.completed ? '완료' : '풀기' }}
-          </span>
-          <ChevronRight :size="18" color="var(--toss-gray-400)" />
-        </div>
-      </router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -47,12 +66,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../api';
-import { Sparkles, AlertCircle, CheckCircle, Brain, ChevronRight } from '@lucide/vue';
+import { Sparkles, AlertCircle, CheckCircle, Brain, ChevronRight, Trash2 } from '@lucide/vue';
 
 const quizzes = ref([]);
 const generating = ref(false);
 const error = ref('');
 const successMsg = ref('');
+const confirmModal = ref(null);
+const targetWeek = ref(1);
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -62,38 +83,70 @@ async function loadQuizzes() {
   try {
     const { data } = await api.get('/quiz');
     quizzes.value = data;
+    // 다음 주차 자동 계산
+    if (data.length > 0) {
+      targetWeek.value = Math.max(...data.map(q => q.week)) + 1;
+    }
   } catch (err) {
     console.error('퀴즈 목록 로드 실패:', err);
   }
 }
 
-async function generateQuiz() {
-  // 다음 주차 확인해서 이미 존재하면 덮어쓰기 확인
-  const nextWeek = quizzes.value.length > 0 ? Math.max(...quizzes.value.map(q => q.week)) + 1 : 1;
-  const existing = quizzes.value.find(q => q.week === nextWeek);
+function handleGenerate() {
+  const week = targetWeek.value;
+  const existing = quizzes.value.find(q => q.week === week);
 
   if (existing) {
-    if (!confirm(`${nextWeek}주차 퀴즈가 이미 존재합니다.\n덮어쓰시겠습니까? (기존 결과가 삭제됩니다)`)) {
-      return;
-    }
+    confirmModal.value = {
+      title: `${week}주차 퀴즈 덮어쓰기`,
+      message: `${week}주차 퀴즈가 이미 존재합니다. 덮어쓰면 기존 퀴즈 결과가 모두 삭제됩니다.`,
+      confirmText: '덮어쓰기',
+      danger: true,
+      action: () => { confirmModal.value = null; doGenerate(week); },
+    };
+  } else {
+    doGenerate(week);
   }
+}
 
+async function doGenerate(week) {
   generating.value = true;
   error.value = '';
   successMsg.value = '';
   try {
-    const { data } = await api.post('/quiz/generate');
+    const { data } = await api.post('/quiz/generate', { week });
     await loadQuizzes();
-    if (data.overwritten) {
-      successMsg.value = `${data.week}주차 퀴즈를 덮어썼습니다.`;
-    } else {
-      successMsg.value = `${data.week}주차 퀴즈가 생성되었습니다.`;
-    }
+    successMsg.value = data.overwritten
+      ? `${data.week}주차 퀴즈를 덮어썼습니다.`
+      : `${data.week}주차 퀴즈가 생성되었습니다.`;
     setTimeout(() => { successMsg.value = ''; }, 3000);
   } catch (err) {
     error.value = err.response?.data?.message || '퀴즈 생성에 실패했습니다.';
   } finally {
     generating.value = false;
+  }
+}
+
+function handleDelete(quiz) {
+  confirmModal.value = {
+    title: `${quiz.week}주차 퀴즈 삭제`,
+    message: `${quiz.week}주차 퀴즈와 모든 참여 결과가 삭제됩니다. 되돌릴 수 없습니다.`,
+    confirmText: '삭제',
+    danger: true,
+    action: () => { confirmModal.value = null; doDelete(quiz.id); },
+  };
+}
+
+async function doDelete(quizId) {
+  error.value = '';
+  successMsg.value = '';
+  try {
+    await api.delete(`/quiz/${quizId}`);
+    await loadQuizzes();
+    successMsg.value = '퀴즈가 삭제되었습니다.';
+    setTimeout(() => { successMsg.value = ''; }, 3000);
+  } catch (err) {
+    error.value = err.response?.data?.message || '퀴즈 삭제에 실패했습니다.';
   }
 }
 
@@ -112,6 +165,42 @@ onMounted(loadQuizzes);
   font-size: 22px;
   font-weight: 700;
   color: var(--toss-gray-900);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.week-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.week-selector label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--toss-gray-600);
+}
+
+.week-input {
+  width: 60px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--toss-gray-200);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: center;
+  background: var(--toss-gray-50);
+  color: var(--toss-gray-900);
+  outline: none;
+}
+
+.week-input:focus {
+  border-color: var(--toss-blue);
+  background: white;
 }
 
 .success-banner {
@@ -155,7 +244,16 @@ onMounted(loadQuizzes);
 .quiz-item {
   display: flex;
   align-items: center;
+  gap: 8px;
+  padding-right: 12px !important;
+}
+
+.quiz-link {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex: 1;
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -178,10 +276,77 @@ onMounted(loadQuizzes);
   margin-left: 26px;
 }
 
-.quiz-right {
+.quiz-status {
+  flex-shrink: 0;
+}
+
+.delete-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--toss-gray-400);
+  cursor: pointer;
+  transition: all 0.15s ease;
   flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: rgba(240,68,82,0.08);
+  color: var(--toss-red);
+}
+
+/* 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.modal-card {
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+.modal-card h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--toss-gray-900);
+  margin-bottom: 10px;
+}
+
+.modal-card p {
+  font-size: 14px;
+  color: var(--toss-gray-600);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-danger {
+  background: var(--toss-red);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #d93843;
 }
 </style>

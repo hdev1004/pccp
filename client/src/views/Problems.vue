@@ -137,24 +137,36 @@
       <div v-if="aiProblems.length > 0" class="ai-registered">
         <h3 class="section-title">등록된 AI 추천 문제</h3>
         <div class="problem-list">
-          <router-link
-            v-for="problem in aiProblems"
-            :key="problem.id"
-            :to="`/problems/${problem.id}`"
-            class="card problem-item"
-          >
-            <div class="problem-info">
-              <div class="problem-title-row">
-                <span class="badge badge-green">AI</span>
-                <h3>{{ problem.title }}</h3>
+          <div v-for="problem in aiProblems" :key="problem.id" class="card problem-item">
+            <router-link :to="`/problems/${problem.id}`" class="problem-link">
+              <div class="problem-info">
+                <div class="problem-title-row">
+                  <span class="badge badge-green">AI</span>
+                  <h3>{{ problem.title }}</h3>
+                </div>
+                <p class="problem-meta">{{ problem.topic }} · {{ problem.created_by_nickname || 'AI 추천' }}</p>
               </div>
-              <p class="problem-meta">{{ problem.topic }} · {{ problem.created_by_nickname || 'AI 추천' }}</p>
-            </div>
-            <div class="problem-count">
-              <p class="count-num">{{ problem.submission_count }}</p>
-              <p class="count-label">제출</p>
-            </div>
-          </router-link>
+              <div class="problem-count">
+                <p class="count-num">{{ problem.submission_count }}</p>
+                <p class="count-label">제출</p>
+              </div>
+            </router-link>
+            <button @click="handleDeleteProblem(problem)" class="delete-btn" title="삭제">
+              <Trash2 :size="14" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 삭제 확인 모달 -->
+      <div v-if="deleteModal" class="modal-overlay" @click.self="deleteModal = null">
+        <div class="modal-card">
+          <h3>문제 삭제</h3>
+          <p>"{{ deleteModal.title }}" 문제와 관련 풀이가 모두 삭제됩니다.</p>
+          <div class="modal-actions">
+            <button @click="deleteModal = null" class="btn btn-secondary">취소</button>
+            <button @click="doDeleteProblem" class="btn btn-danger">삭제</button>
+          </div>
         </div>
       </div>
     </div>
@@ -167,7 +179,7 @@ import api from '../api';
 import CustomSelect from '../components/Select.vue';
 import {
   BookOpen, Sparkles, GraduationCap, ChevronDown, ChevronRight,
-  Check, ExternalLink, Plus, Loader2,
+  Check, ExternalLink, Plus, Loader2, Trash2,
 } from '@lucide/vue';
 
 const activeTab = ref('curriculum');
@@ -263,6 +275,23 @@ async function addAiProblem(rec) {
     await loadProblems();
   } catch (err) {
     console.error('AI 문제 등록 실패:', err);
+  }
+}
+
+const deleteModal = ref(null);
+
+function handleDeleteProblem(problem) {
+  deleteModal.value = problem;
+}
+
+async function doDeleteProblem() {
+  if (!deleteModal.value) return;
+  try {
+    await api.delete(`/problems/${deleteModal.value.id}`);
+    deleteModal.value = null;
+    await loadProblems();
+  } catch (err) {
+    console.error('문제 삭제 실패:', err);
   }
 }
 
@@ -583,8 +612,37 @@ onMounted(loadProblems);
 .problem-item {
   display: flex;
   align-items: center;
+  gap: 8px;
+  padding-right: 12px !important;
+}
+
+.problem-link {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex: 1;
+  min-width: 0;
   cursor: pointer;
+}
+
+.delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--toss-gray-400);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.delete-btn:hover {
+  background: rgba(240,68,82,0.08);
+  color: var(--toss-red);
 }
 
 .problem-title-row {
@@ -628,6 +686,56 @@ onMounted(loadProblems);
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+
+.modal-card {
+  background: white;
+  border-radius: 20px;
+  padding: 28px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+.modal-card h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--toss-gray-900);
+  margin-bottom: 10px;
+}
+
+.modal-card p {
+  font-size: 14px;
+  color: var(--toss-gray-600);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn-danger {
+  background: var(--toss-red);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #d93843;
 }
 
 @media (max-width: 768px) {
