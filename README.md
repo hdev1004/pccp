@@ -93,9 +93,9 @@ npm install
 `.env` 파일 생성:
 
 ```env
-DB_HOST=222.120.20.116
+DB_HOST=your_db_host
 DB_PORT=5432
-DB_NAME=postgres
+DB_NAME=your_db_name
 DB_SCHEMA=pccp
 DB_USER=your_username
 DB_PASSWORD=your_password
