@@ -243,32 +243,123 @@ quiz_results (id, quiz_id, user_id, answers[JSONB], score, completed_at)
 
 ---
 
-## 운영 배포
+## 배포 가이드 (개인 서버 + PM2)
 
-### 빌드
+### 1. 서버에 소스 가져오기
+
+```bash
+git clone https://github.com/hdev1004/pccp.git
+cd pccp
+```
+
+### 2. 의존성 설치
+
+```bash
+cd server && npm install
+cd ../client && npm install
+```
+
+### 3. 환경변수 설정
+
+```bash
+# 서버
+cp server/.env.example server/.env
+vi server/.env   # DB, JWT_SECRET, OPENAI_API_KEY 설정
+
+# 클라이언트
+cp client/.env.example client/.env
+vi client/.env   # VITE_API_URL을 실제 서버 주소로 변경
+```
+
+### 4. 프론트엔드 빌드
 
 ```bash
 cd client
 npm run build   # dist/ 폴더 생성
 ```
 
-### 통합 배포 (Express 정적 파일 서빙)
+### 5. Express에서 프론트 정적 파일 서빙
+
+`server/index.js`에 아래를 추가하면 프론트/백을 하나의 포트로 서빙 가능:
 
 ```js
 const path = require('path');
+
+// 정적 파일 서빙 (빌드된 Vue 앱)
 app.use(express.static(path.join(__dirname, '../client/dist')));
+
+// SPA 라우팅 — API가 아닌 모든 요청을 index.html로
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
 ```
 
-### PM2
+> 이렇게 하면 `http://서버IP:3000`으로 프론트+백 모두 접속 가능
+
+### 6. PM2로 서버 실행
 
 ```bash
+# PM2 설치 (최초 1회)
 npm install -g pm2
+
+# 서버 시작
 cd server
 pm2 start index.js --name pccp
+
+# 상태 확인
+pm2 status
+
+# 로그 확인
+pm2 logs pccp
+
+# 서버 재시작
+pm2 restart pccp
+
+# 시스템 부팅 시 자동 시작
+pm2 startup
 pm2 save
+```
+
+### 7. 업데이트 배포
+
+```bash
+cd ~/pccp
+git pull
+
+# 프론트 변경 시
+cd client && npm run build
+
+# 서버 변경 시
+cd ../server && pm2 restart pccp
+```
+
+### (선택) Nginx 리버스 프록시
+
+도메인이나 80/443 포트를 쓰려면 Nginx를 앞에 두면 됩니다:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+
+        # SSE 스트리밍을 위해 버퍼링 비활성화
+        proxy_buffering off;
+        proxy_set_header X-Accel-Buffering no;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/pccp /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ---
