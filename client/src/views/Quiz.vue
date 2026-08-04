@@ -7,7 +7,7 @@
 
     <div class="quiz-header">
       <h1>{{ quiz.week }}주차 시간복잡도 퀴즈</h1>
-      <p v-if="!quiz.completed">{{ quiz.questions.length }}문제 · 각 문제의 시간복잡도를 선택하세요</p>
+      <p v-if="!quiz.completed">{{ quiz.questions.length }}문제 · 객관식 {{ choiceCount }}개, 단답형 {{ shortAnswerCount }}개, 서술형 {{ descriptiveCount }}개</p>
     </div>
 
     <!-- 이미 풀었을 때 -->
@@ -47,13 +47,24 @@
       <!-- 문제별 정답 확인 -->
       <div v-for="(q, idx) in quiz.questions" :key="q.id" class="card question-card">
         <div class="question-top">
-          <span class="badge" :class="quiz.result.answers[idx] === q.answer ? 'badge-green' : 'badge-red'">
-            {{ quiz.result.answers[idx] === q.answer ? '정답' : '오답' }}
+          <span class="badge" :class="getResultBadge(q, idx)">
+            {{ getResultLabel(q, idx) }}
           </span>
           <span class="question-num">문제 {{ idx + 1 }}</span>
+          <span class="question-type-badge" :class="'type-' + (q.type || 'choice')">
+            {{ { choice: '객관식', short_answer: '단답형', descriptive: '서술형' }[q.type || 'choice'] }}
+          </span>
         </div>
+
+        <!-- 서술형: 복잡도 표시 -->
+        <div v-if="q.type === 'descriptive'" class="complexity-badge">
+          시간복잡도: <strong>{{ q.complexity }}</strong>
+        </div>
+
         <CodeBlock :code="q.code" />
-        <div class="options-grid">
+
+        <!-- 객관식 결과 -->
+        <div v-if="!q.type || q.type === 'choice'" class="options-grid">
           <div
             v-for="(option, optIdx) in q.options"
             :key="optIdx"
@@ -64,6 +75,40 @@
             }"
           >{{ option }}</div>
         </div>
+
+        <!-- 단답형 결과 -->
+        <div v-else-if="q.type === 'short_answer'" class="text-answer-result">
+          <div class="answer-row">
+            <span class="answer-label">내 답안</span>
+            <span class="answer-value">{{ quiz.result.answers[idx] || '(미작성)' }}</span>
+          </div>
+          <div class="answer-row">
+            <span class="answer-label">정답</span>
+            <span class="answer-value correct-answer">{{ q.answer }}</span>
+          </div>
+        </div>
+
+        <!-- 서술형 결과 -->
+        <div v-else-if="q.type === 'descriptive'" class="text-answer-result">
+          <div class="answer-block">
+            <span class="answer-label">내 답안</span>
+            <div class="answer-text">{{ quiz.result.answers[idx] || '(미작성)' }}</div>
+          </div>
+          <div class="answer-block">
+            <span class="answer-label">모범 답안</span>
+            <div class="answer-text model-answer">{{ q.answer }}</div>
+          </div>
+        </div>
+
+        <!-- AI 피드백 (서술형/단답형) -->
+        <div v-if="(q.type === 'descriptive' || q.type === 'short_answer') && getFeedback(idx)" class="ai-feedback">
+          <Sparkles :size="15" color="var(--toss-blue)" />
+          <div>
+            <strong>AI 채점 피드백</strong>
+            <p>{{ getFeedback(idx) }}</p>
+          </div>
+        </div>
+
         <div class="explanation">
           <Lightbulb :size="15" color="var(--toss-blue)" />
           <span>{{ q.explanation }}</span>
@@ -74,9 +119,26 @@
     <!-- 퀴즈 풀기 -->
     <div v-else>
       <div v-for="(q, idx) in quiz.questions" :key="q.id" class="card question-card">
-        <p class="question-label">문제 {{ idx + 1 }}</p>
+        <div class="question-label-row">
+          <p class="question-label">문제 {{ idx + 1 }}</p>
+          <span class="question-type-badge" :class="'type-' + (q.type || 'choice')">
+            {{ { choice: '객관식', short_answer: '단답형', descriptive: '서술형' }[q.type || 'choice'] }}
+          </span>
+        </div>
+
+        <!-- 서술형: 복잡도 표시 + 안내 -->
+        <div v-if="q.type === 'descriptive'" class="complexity-badge">
+          시간복잡도: <strong>{{ q.complexity }}</strong>
+          <span class="complexity-hint">— 왜 이 복잡도가 되는지 설명하세요</span>
+        </div>
+
+        <!-- 단답형: 안내 -->
+        <p v-if="q.type === 'short_answer'" class="short-answer-hint">아래 코드의 시간복잡도를 직접 입력하세요 (예: O(n), O(n²))</p>
+
         <CodeBlock :code="q.code" />
-        <div class="options-grid">
+
+        <!-- 객관식 -->
+        <div v-if="!q.type || q.type === 'choice'" class="options-grid">
           <button
             v-for="(option, optIdx) in q.options"
             :key="optIdx"
@@ -84,6 +146,26 @@
             class="option-btn"
             :class="{ selected: answers[idx] === optIdx }"
           >{{ option }}</button>
+        </div>
+
+        <!-- 단답형 입력 -->
+        <div v-else-if="q.type === 'short_answer'" class="text-input-area">
+          <input
+            type="text"
+            v-model="answers[idx]"
+            placeholder="예: O(n log n)"
+            class="text-answer-input"
+          />
+        </div>
+
+        <!-- 서술형 입력 -->
+        <div v-else-if="q.type === 'descriptive'" class="text-input-area">
+          <textarea
+            v-model="answers[idx]"
+            placeholder="이 코드의 시간복잡도가 왜 이렇게 되는지 설명해주세요..."
+            class="text-answer-textarea"
+            rows="4"
+          ></textarea>
         </div>
       </div>
 
@@ -94,9 +176,10 @@
           :disabled="submitting || !allAnswered"
         >
           <Loader2 v-if="submitting" :size="18" class="spin" />
-          {{ submitting ? '제출 중...' : '제출하기' }}
+          {{ submitting ? 'AI 채점 중...' : '제출하기' }}
         </button>
         <p v-if="!allAnswered" class="submit-hint">모든 문제를 풀어주세요</p>
+        <p v-if="submitting" class="submit-hint">서술형·단답형은 AI가 채점합니다. 잠시만 기다려주세요.</p>
       </div>
     </div>
   </div>
@@ -106,7 +189,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import api from '../api';
-import { ArrowLeft, Lightbulb, Trophy, BarChart3, Loader2 } from '@lucide/vue';
+import { ArrowLeft, Lightbulb, Trophy, BarChart3, Loader2, Sparkles } from '@lucide/vue';
 import CodeBlock from '../components/CodeBlock.vue';
 
 const route = useRoute();
@@ -117,8 +200,47 @@ const submitting = ref(false);
 
 const allAnswered = computed(() => {
   if (!quiz.value) return false;
-  return quiz.value.questions.every((_, idx) => answers.value[idx] !== undefined);
+  return quiz.value.questions.every((q, idx) => {
+    const answer = answers.value[idx];
+    if (answer === undefined || answer === null) return false;
+    // 텍스트 입력은 빈 문자열 체크
+    if ((q.type === 'short_answer' || q.type === 'descriptive') && !answer.trim()) return false;
+    return true;
+  });
 });
+
+const choiceCount = computed(() => quiz.value?.questions.filter(q => !q.type || q.type === 'choice').length || 0);
+const shortAnswerCount = computed(() => quiz.value?.questions.filter(q => q.type === 'short_answer').length || 0);
+const descriptiveCount = computed(() => quiz.value?.questions.filter(q => q.type === 'descriptive').length || 0);
+
+function getResultBadge(q, idx) {
+  const type = q.type || 'choice';
+  if (type === 'choice') {
+    return quiz.value.result.answers[idx] === q.answer ? 'badge-green' : 'badge-red';
+  }
+  // 서술형/단답형: feedbacks의 score 기반
+  const feedbacks = quiz.value.result.feedbacks;
+  if (feedbacks && feedbacks[idx] !== undefined) {
+    // feedbacks에 score 정보가 없으므로, AI가 정답 판정한 경우를 피드백 내용으로 추론하지 않고
+    // 단답형은 문자열 비교, 서술형은 피드백 존재 여부로 표시
+    // 실제로는 서버에서 score에 반영되었으므로, 여기서는 피드백 유무만 확인
+  }
+  return 'badge-blue';
+}
+
+function getResultLabel(q, idx) {
+  const type = q.type || 'choice';
+  if (type === 'choice') {
+    return quiz.value.result.answers[idx] === q.answer ? '정답' : '오답';
+  }
+  return 'AI 채점';
+}
+
+function getFeedback(idx) {
+  const feedbacks = quiz.value?.result?.feedbacks;
+  if (!feedbacks) return null;
+  return feedbacks[idx] || feedbacks[String(idx)] || null;
+}
 
 async function loadQuiz() {
   try {
@@ -357,6 +479,189 @@ onMounted(loadQuiz);
   font-size: 13px;
   color: var(--toss-gray-700);
   line-height: 1.5;
+}
+
+/* 문제 유형 뱃지 */
+.question-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.question-label-row .question-label {
+  margin-bottom: 0;
+}
+
+.question-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.type-choice {
+  background: var(--toss-gray-100);
+  color: var(--toss-gray-600);
+}
+
+.type-short_answer {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.type-descriptive {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+/* 복잡도 표시 */
+.complexity-badge {
+  font-size: 14px;
+  color: var(--toss-gray-700);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+}
+
+.complexity-badge strong {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.complexity-hint {
+  color: var(--toss-gray-500);
+  font-size: 13px;
+}
+
+.short-answer-hint {
+  font-size: 13px;
+  color: var(--toss-gray-500);
+  margin-bottom: 12px;
+}
+
+/* 텍스트 입력 영역 */
+.text-input-area {
+  margin-top: 14px;
+}
+
+.text-answer-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--toss-gray-200);
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: 'D2Coding', monospace;
+  font-weight: 600;
+  color: var(--toss-gray-900);
+  background: white;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.text-answer-input:focus {
+  outline: none;
+  border-color: var(--toss-blue);
+}
+
+.text-answer-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--toss-gray-200);
+  border-radius: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--toss-gray-900);
+  background: white;
+  resize: vertical;
+  line-height: 1.6;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.text-answer-textarea:focus {
+  outline: none;
+  border-color: var(--toss-blue);
+}
+
+/* 결과 - 텍스트 답안 */
+.text-answer-result {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.answer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--toss-gray-50);
+  border-radius: 10px;
+}
+
+.answer-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--toss-gray-500);
+  min-width: 52px;
+}
+
+.answer-value {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'D2Coding', monospace;
+  color: var(--toss-gray-800);
+}
+
+.correct-answer {
+  color: #15803d;
+}
+
+.answer-block {
+  padding: 12px 14px;
+  background: var(--toss-gray-50);
+  border-radius: 10px;
+}
+
+.answer-text {
+  font-size: 14px;
+  color: var(--toss-gray-800);
+  line-height: 1.6;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.model-answer {
+  color: #15803d;
+}
+
+/* AI 피드백 */
+.ai-feedback {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+  border-radius: 12px;
+  border: 1px solid #c7d2fe;
+}
+
+.ai-feedback strong {
+  font-size: 13px;
+  color: var(--toss-blue);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-feedback p {
+  font-size: 13px;
+  color: var(--toss-gray-700);
+  line-height: 1.6;
+  margin: 0;
 }
 
 /* 제출 영역 */

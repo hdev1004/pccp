@@ -1,9 +1,80 @@
 const express = require('express');
+const OpenAI = require('openai');
 const { pool } = require('../db/database');
 const authMiddleware = require('../middleware/auth');
 const { generateQuiz } = require('../scheduler/quizGenerator');
 
 const router = express.Router();
+
+function getOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
+// AI 채점: 서술형/단답형 문제 채점 + 피드백
+async function gradeWithAI(questions, answers) {
+  const toGrade = [];
+  questions.forEach((q, idx) => {
+    if ((q.type === 'descriptive' || q.type === 'short_answer') && answers[idx] !== undefined) {
+      toGrade.push({ index: idx, question: q, userAnswer: answers[idx] });
+    }
+  });
+
+  if (toGrade.length === 0) return { scores: {}, feedbacks: {} };
+
+  const prompt = `당신은 알고리즘 시간복잡도 시험 채점관입니다.
+학생의 답안을 채점하고 피드백을 제공해주세요.
+
+${toGrade.map((item, i) => `
+## 문제 ${i + 1} (${item.question.type === 'descriptive' ? '서술형' : '단답형'})
+
+### 코드:
+\`\`\`python
+${item.question.code}
+\`\`\`
+
+${item.question.type === 'descriptive' ? `### 해당 코드의 시간복잡도: ${item.question.complexity}
+### 문제: 위 코드의 시간복잡도가 왜 ${item.question.complexity}인지 설명하시오.
+### 모범 답안: ${item.question.answer}
+### 핵심 키워드: ${(item.question.grading_keywords || []).join(', ')}` : `### 문제: 위 코드의 시간복잡도를 쓰시오.
+### 정답: ${item.question.answer}`}
+
+### 학생 답안: ${item.userAnswer || '(미작성)'}
+`).join('\n')}
+
+각 문제에 대해 아래 JSON 형식으로 채점 결과를 반환하세요:
+{"results": [
+  {
+    "index": 문제의 원래 인덱스,
+    "score": 0 또는 1 (정답이면 1, 오답이면 0, 서술형은 핵심을 잘 설명했으면 1),
+    "feedback": "채점 피드백 (잘한 점, 부족한 점, 보완할 내용을 친절하게 설명)"
+  }
+]}
+
+채점 기준:
+- 단답형: 표기법이 정확하면 1점 (O(n), O(n^2), O(n²) 등 동일 의미면 정답 처리). 답이 비어있으면 0점.
+- 서술형: 핵심 개념을 이해하고 설명했으면 1점. 부분적으로 맞아도 핵심을 놓쳤으면 0점. 답이 비어있으면 0점.
+- 피드백은 틀렸어도 격려하면서 어떻게 생각하면 좋을지 보완점을 알려주세요.`;
+
+  const openai = getOpenAI();
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+  });
+
+  const parsed = JSON.parse(response.choices[0].message.content);
+  const results = parsed.results || [];
+
+  const scores = {};
+  const feedbacks = {};
+  for (const r of results) {
+    scores[r.index] = r.score;
+    feedbacks[r.index] = r.feedback;
+  }
+
+  return { scores, feedbacks };
+}
 
 // 다음 퀴즈 주차 계산 (삭제되지 않은 퀴즈 중 가장 큰 week + 1)
 async function getNextWeek() {
@@ -92,11 +163,16 @@ router.get('/:id', authMiddleware, async (req, res) => {
       });
     }
 
-    const questions = quiz.rows[0].questions.map(q => ({
-      id: q.id,
-      code: q.code,
-      options: q.options,
-    }));
+    const questions = quiz.rows[0].questions.map(q => {
+      const base = { id: q.id, type: q.type || 'choice', code: q.code };
+      if (base.type === 'choice') {
+        base.options = q.options;
+      } else if (base.type === 'descriptive') {
+        base.complexity = q.complexity;
+      }
+      // short_answer: 코드만 보여줌 (answer 숨김)
+      return base;
+    });
 
     res.json({
       id: quiz.rows[0].id,
@@ -134,17 +210,47 @@ router.post('/:id/submit', authMiddleware, async (req, res) => {
     }
 
     const questions = quiz.rows[0].questions;
+
+    // 4지선다 채점
     let score = 0;
     answers.forEach((answer, index) => {
-      if (questions[index] && answer === questions[index].answer) {
+      const q = questions[index];
+      if (!q) return;
+      const type = q.type || 'choice';
+      if (type === 'choice' && answer === q.answer) {
         score++;
       }
     });
 
+    // 서술형/단답형 AI 채점
+    let feedbacks = null;
+    const hasTextQuestions = questions.some(q => q.type === 'descriptive' || q.type === 'short_answer');
+    if (hasTextQuestions) {
+      try {
+        const aiResult = await gradeWithAI(questions, answers);
+        feedbacks = {};
+        for (const [idx, fb] of Object.entries(aiResult.feedbacks)) {
+          feedbacks[idx] = fb;
+        }
+        for (const [idx, s] of Object.entries(aiResult.scores)) {
+          score += s;
+        }
+      } catch (err) {
+        console.error('AI 채점 오류:', err);
+        // AI 채점 실패 시에도 제출은 진행 (서술형/단답형 0점 처리)
+        feedbacks = {};
+        questions.forEach((q, idx) => {
+          if (q.type === 'descriptive' || q.type === 'short_answer') {
+            feedbacks[idx] = 'AI 채점에 실패했습니다. 관리자에게 문의해주세요.';
+          }
+        });
+      }
+    }
+
     const result = await pool.query(
-      `INSERT INTO quiz_results (quiz_id, user_id, answers, score)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.params.id, req.user.id, JSON.stringify(answers), score]
+      `INSERT INTO quiz_results (quiz_id, user_id, answers, score, feedbacks)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [req.params.id, req.user.id, JSON.stringify(answers), score, feedbacks ? JSON.stringify(feedbacks) : null]
     );
 
     res.json({

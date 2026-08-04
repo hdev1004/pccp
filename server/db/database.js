@@ -76,6 +76,8 @@ async function initDatabase() {
         -- 소프트 삭제용 컬럼
         ALTER TABLE ${schema}.problems ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
         ALTER TABLE ${schema}.weekly_quizzes ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP DEFAULT NULL;
+        -- AI 채점 피드백 저장
+        ALTER TABLE ${schema}.quiz_results ADD COLUMN IF NOT EXISTS feedbacks JSONB DEFAULT NULL;
       EXCEPTION WHEN others THEN NULL;
       END $$;
     `);
