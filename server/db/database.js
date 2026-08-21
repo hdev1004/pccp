@@ -214,7 +214,14 @@ async function initDatabase() {
           [testerId]
         );
 
-        // 샘플 퀴즈 1주차 (group_id=NULL, tester 전용)
+        console.log('테스터 샘플 데이터 시드 완료 (풀이 8개, AI문제 2개)');
+      }
+
+      // 샘플 퀴즈 1주차 (group_id=NULL, tester 전용) — 별도 체크
+      const hasQuiz = await client.query(
+        `SELECT COUNT(*) FROM ${schema}.weekly_quizzes WHERE group_id IS NULL AND week = 1 AND deleted_at IS NULL`
+      );
+      if (parseInt(hasQuiz.rows[0].count) === 0) {
         const sampleQuestions = [
           {
             id: 1, type: 'choice',
@@ -279,8 +286,7 @@ async function initDatabase() {
            VALUES (1, $1, NULL)`,
           [JSON.stringify(sampleQuestions)]
         );
-
-        console.log('테스터 샘플 데이터 시드 완료 (풀이 8개, AI문제 2개, 퀴즈 1주차)');
+        console.log('테스터 샘플 퀴즈 1주차 시드 완료');
       }
     }
 
