@@ -119,9 +119,14 @@ async function initDatabase() {
       console.log('기본 그룹 생성: PCCP 스터디 (초대코드: PCCP24)');
     }
 
-    // 기존 퀴즈에 group_id 부여 (마이그레이션)
+    // 기존 퀴즈에 group_id 부여 (마이그레이션 — 충돌 없는 것만)
     await client.query(
-      `UPDATE ${schema}.weekly_quizzes SET group_id = 1 WHERE group_id IS NULL`
+      `UPDATE ${schema}.weekly_quizzes wq SET group_id = 1
+       WHERE wq.group_id IS NULL AND wq.deleted_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM ${schema}.weekly_quizzes wq2
+         WHERE wq2.week = wq.week AND wq2.group_id = 1 AND wq2.deleted_at IS NULL
+       )`
     );
 
     // 기본 계정 생성 (admin / admin1234) — group_id=1 (스터디 그룹)
