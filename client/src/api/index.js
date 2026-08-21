@@ -17,9 +17,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const auth = useAuthStore();
-      auth.logout();
-      window.location.href = '/login';
+      const url = error.config?.url || '';
+      // 로그인/회원가입 요청의 401은 인터셉터에서 무시 (각 페이지에서 직접 처리)
+      if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
+        const auth = useAuthStore();
+        auth.logout();
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

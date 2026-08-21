@@ -64,11 +64,13 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { useToast } from '../composables/useToast';
 import api from '../api';
 import { Code, User as UserIcon, Lock, AlertCircle, Loader2 } from '@lucide/vue';
 
 const router = useRouter();
 const auth = useAuthStore();
+const toast = useToast();
 
 const username = ref('');
 const password = ref('');
@@ -87,7 +89,9 @@ async function handleLogin() {
     auth.setAuth(data.token, data.user);
     router.push('/');
   } catch (err) {
-    error.value = err.response?.data?.message || '로그인에 실패했습니다.';
+    const msg = err.response?.data?.message || '로그인에 실패했습니다.';
+    error.value = msg;
+    toast.error(msg);
   } finally {
     loading.value = false;
   }
