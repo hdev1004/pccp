@@ -103,13 +103,18 @@
               코드 보기
             </button>
             <button
-              v-if="sub.user_id === auth.user?.id"
-              @click.stop="deleteSubmission"
+              v-if="sub.user_id === auth.user?.id && !showDeleteConfirm"
+              @click.stop="showDeleteConfirm = true"
               class="delete-btn"
               title="삭제"
             >
               <Trash2 :size="14" />
             </button>
+            <div v-if="sub.user_id === auth.user?.id && showDeleteConfirm" class="inline-confirm" @click.stop>
+              <span>삭제할까요?</span>
+              <button class="confirm-yes" @click.stop="deleteSubmission">삭제</button>
+              <button class="confirm-no" @click.stop="showDeleteConfirm = false">취소</button>
+            </div>
           </div>
         </div>
       </div>
@@ -198,6 +203,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
+import { useToast } from '../composables/useToast';
 import { useRoute } from 'vue-router';
 import api from '../api';
 import { ArrowLeft, ExternalLink, Send, AlertCircle, CheckCircle, User, Trash2, StickyNote, Code, X, Sparkles } from '@lucide/vue';
@@ -216,6 +222,7 @@ import { useAuthStore } from '../stores/auth';
 import CustomSelect from '../components/Select.vue';
 
 const auth = useAuthStore();
+const toast = useToast();
 
 const langOptions = [
   { value: 'python', label: 'Python' },
@@ -449,13 +456,16 @@ async function saveMemo(sub) {
   }
 }
 
+const showDeleteConfirm = ref(false);
+
 async function deleteSubmission() {
-  if (!confirm('풀이를 삭제하시겠습니까?')) return;
   try {
     await api.delete(`/problems/${route.params.id}/submit`);
+    showDeleteConfirm.value = false;
+    toast.success('풀이가 삭제되었습니다');
     await loadProblem();
   } catch (err) {
-    console.error('풀이 삭제 실패:', err);
+    toast.error('풀이 삭제에 실패했습니다');
   }
 }
 
@@ -976,5 +986,35 @@ onMounted(loadProblem);
   padding: 6px 12px;
   font-size: 12px;
   border-radius: 8px;
+}
+
+.inline-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--toss-gray-600);
+}
+
+.confirm-yes {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--toss-red);
+  color: white;
+  cursor: pointer;
+}
+
+.confirm-no {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--toss-gray-100);
+  color: var(--toss-gray-600);
+  cursor: pointer;
 }
 </style>

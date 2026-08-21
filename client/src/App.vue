@@ -7,12 +7,14 @@
       </main>
     </template>
     <router-view v-else />
+    <Toast />
   </div>
 </template>
 
 <script setup>
 import { useAuthStore } from './stores/auth';
 import Navbar from './components/Navbar.vue';
+import Toast from './components/Toast.vue';
 
 const auth = useAuthStore();
 </script>

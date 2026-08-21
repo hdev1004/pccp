@@ -9,7 +9,7 @@ function getOpenAI() {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-async function generateQuiz(week) {
+async function generateQuiz(week, groupId = null) {
   const openai = getOpenAI();
 
   const prompt = `당신은 알고리즘 시간복잡도 퀴즈 출제자입니다.
@@ -92,8 +92,8 @@ answer는 options 배열의 인덱스(0부터)입니다.`;
   questions = questions.map((q, i) => ({ ...q, id: i + 1 }));
 
   const result = await pool.query(
-    'INSERT INTO weekly_quizzes (week, questions) VALUES ($1, $2) RETURNING *',
-    [week, JSON.stringify(questions)]
+    'INSERT INTO weekly_quizzes (week, questions, group_id) VALUES ($1, $2, $3) RETURNING *',
+    [week, JSON.stringify(questions), groupId]
   );
 
   console.log(`${week}주차 퀴즈 생성 완료 (${questions.length}문제)`);
@@ -103,9 +103,16 @@ answer는 options 배열의 인덱스(0부터)입니다.`;
 function startScheduler() {
   schedule.scheduleJob('0 9 * * 1', async () => {
     try {
-      const result = await pool.query('SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes');
-      const week = result.rows[0].max_week + 1;
-      await generateQuiz(week);
+      // 모든 그룹에 대해 퀴즈 생성
+      const groups = await pool.query('SELECT id FROM groups');
+      for (const group of groups.rows) {
+        const result = await pool.query(
+          'SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes WHERE group_id = $1',
+          [group.id]
+        );
+        const week = result.rows[0].max_week + 1;
+        await generateQuiz(week, group.id);
+      }
     } catch (err) {
       console.error('스케줄 퀴즈 생성 실패:', err);
     }

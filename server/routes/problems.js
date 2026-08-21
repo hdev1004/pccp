@@ -10,15 +10,25 @@ router.get('/', authMiddleware, async (req, res) => {
   const { week, source } = req.query;
 
   try {
+    const groupId = req.user.group_id;
     let query = `
       SELECT p.*, u.nickname as created_by_nickname,
-        (SELECT COUNT(*) FROM submissions s WHERE s.problem_id = p.id) as submission_count
+        (SELECT COUNT(*) FROM submissions s
+         JOIN users su ON s.user_id = su.id
+         WHERE s.problem_id = p.id
+           AND (($1::int IS NOT NULL AND su.group_id = $1) OR ($1::int IS NULL AND s.user_id = $2))
+        ) as submission_count
       FROM problems p
       LEFT JOIN users u ON p.created_by = u.id
       WHERE p.deleted_at IS NULL
+        AND (p.source = 'curriculum' OR p.created_by IN (
+          SELECT id FROM users
+          WHERE ($1::int IS NOT NULL AND group_id = $1)
+             OR ($1::int IS NULL AND id = $2)
+        ))
     `;
-    const params = [];
-    let idx = 1;
+    const params = [groupId, req.user.id];
+    let idx = 3;
 
     if (week) {
       query += ` AND p.week = $${idx++}`;
@@ -136,12 +146,18 @@ router.get('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: '문제를 찾을 수 없습니다.' });
     }
 
+    const groupId = req.user.group_id;
     const submissions = await pool.query(
       `SELECT s.*, u.nickname
        FROM submissions s LEFT JOIN users u ON s.user_id = u.id
        WHERE s.problem_id = $1
+         AND s.user_id IN (
+           SELECT id FROM users
+           WHERE ($2::int IS NOT NULL AND group_id = $2)
+              OR ($2::int IS NULL AND id = $3)
+         )
        ORDER BY s.submitted_at DESC`,
-      [req.params.id]
+      [req.params.id, groupId, req.user.id]
     );
 
     res.json({ ...problem.rows[0], submissions: submissions.rows });

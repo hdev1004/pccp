@@ -76,9 +76,13 @@ ${item.question.type === 'descriptive' ? `### 해당 코드의 시간복잡도: 
   return { scores, feedbacks };
 }
 
-// 다음 퀴즈 주차 계산 (삭제되지 않은 퀴즈 중 가장 큰 week + 1)
-async function getNextWeek() {
-  const result = await pool.query('SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes WHERE deleted_at IS NULL');
+// 다음 퀴즈 주차 계산 (그룹 내 삭제되지 않은 퀴즈 중 가장 큰 week + 1)
+async function getNextWeek(groupId) {
+  const result = await pool.query(
+    `SELECT COALESCE(MAX(week), 0) as max_week FROM weekly_quizzes
+     WHERE deleted_at IS NULL AND (($1::int IS NOT NULL AND group_id = $1) OR ($1::int IS NULL AND group_id IS NULL))`,
+    [groupId]
+  );
   return result.rows[0].max_week + 1;
 }
 
@@ -86,17 +90,27 @@ async function getNextWeek() {
 router.post('/generate', authMiddleware, async (req, res) => {
   try {
     const { week: requestedWeek } = req.body;
-    const week = requestedWeek || await getNextWeek();
+    const groupId = req.user.group_id;
 
-    // 해당 주차에 이미 퀴즈가 있으면 소프트 삭제 후 재생성 (기존 결과 보존)
+    if (!groupId) {
+      return res.status(403).json({ message: '그룹에 소속되어야 퀴즈를 생성할 수 있습니다.' });
+    }
+
+    const week = requestedWeek || await getNextWeek(groupId);
+
+    // 해당 주차+그룹에 이미 퀴즈가 있으면 소프트 삭제 후 재생성 (기존 결과 보존)
     let overwritten = false;
-    const existing = await pool.query('SELECT id FROM weekly_quizzes WHERE week = $1 AND deleted_at IS NULL', [week]);
+    const existing = await pool.query(
+      `SELECT id FROM weekly_quizzes WHERE week = $1 AND deleted_at IS NULL
+       AND (($2::int IS NOT NULL AND group_id = $2) OR ($2::int IS NULL AND group_id IS NULL))`,
+      [week, groupId]
+    );
     if (existing.rows.length > 0) {
       await pool.query('UPDATE weekly_quizzes SET deleted_at = NOW() WHERE id = $1', [existing.rows[0].id]);
       overwritten = true;
     }
 
-    const quiz = await generateQuiz(week);
+    const quiz = await generateQuiz(week, groupId);
     res.status(201).json({ ...quiz, overwritten });
   } catch (err) {
     console.error('퀴즈 생성 오류:', err);
@@ -107,14 +121,20 @@ router.post('/generate', authMiddleware, async (req, res) => {
 // 퀴즈 목록
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    const groupId = req.user.group_id;
     const result = await pool.query(
       `SELECT wq.id, wq.week, wq.created_at,
-        (SELECT COUNT(*) FROM quiz_results qr WHERE qr.quiz_id = wq.id) as participant_count,
+        (SELECT COUNT(*) FROM quiz_results qr
+         JOIN users qu ON qr.user_id = qu.id
+         WHERE qr.quiz_id = wq.id
+           AND (($2::int IS NOT NULL AND qu.group_id = $2) OR ($2::int IS NULL AND qr.user_id = $1))
+        ) as participant_count,
         EXISTS(SELECT 1 FROM quiz_results qr WHERE qr.quiz_id = wq.id AND qr.user_id = $1) as completed
        FROM weekly_quizzes wq
        WHERE wq.deleted_at IS NULL
+         AND (($2::int IS NOT NULL AND wq.group_id = $2) OR ($2::int IS NULL AND wq.group_id IS NULL))
        ORDER BY wq.week DESC`,
-      [req.user.id]
+      [req.user.id, groupId]
     );
     res.json(result.rows);
   } catch (err) {
@@ -272,13 +292,19 @@ router.get('/:id/dashboard', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: '퀴즈를 찾을 수 없습니다.' });
     }
 
+    const groupId = req.user.group_id;
     const results = await pool.query(
       `SELECT qr.*, u.nickname
        FROM quiz_results qr
        LEFT JOIN users u ON qr.user_id = u.id
        WHERE qr.quiz_id = $1
+         AND qr.user_id IN (
+           SELECT id FROM users
+           WHERE ($2::int IS NOT NULL AND group_id = $2)
+              OR ($2::int IS NULL AND id = $3)
+         )
        ORDER BY qr.score DESC, qr.completed_at ASC`,
-      [req.params.id]
+      [req.params.id, groupId, req.user.id]
     );
 
     res.json({

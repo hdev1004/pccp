@@ -64,6 +64,19 @@
             </div>
           </div>
 
+          <div class="input-group">
+            <label>초대코드 <span class="optional">(선택)</span></label>
+            <div class="input-wrap">
+              <Users :size="18" class="input-icon" />
+              <input
+                v-model="inviteCode"
+                type="text"
+                placeholder="스터디 그룹 초대코드"
+              />
+            </div>
+            <p class="input-hint">초대코드가 있으면 바로 그룹에 참여됩니다</p>
+          </div>
+
           <div v-if="error" class="error-msg">
             <AlertCircle :size="15" />
             <span>{{ error }}</span>
@@ -89,7 +102,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../api';
-import { UserPlus, User as UserIcon, Smile, Lock, ShieldCheck, AlertCircle, Loader2 } from '@lucide/vue';
+import { UserPlus, User as UserIcon, Smile, Lock, ShieldCheck, Users, AlertCircle, Loader2 } from '@lucide/vue';
 
 const router = useRouter();
 
@@ -97,6 +110,7 @@ const username = ref('');
 const nickname = ref('');
 const password = ref('');
 const passwordConfirm = ref('');
+const inviteCode = ref('');
 const error = ref('');
 const loading = ref(false);
 
@@ -120,6 +134,7 @@ async function handleRegister() {
       username: username.value,
       password: password.value,
       nickname: nickname.value,
+      inviteCode: inviteCode.value || undefined,
     });
     router.push('/login');
   } catch (err) {
@@ -293,5 +308,18 @@ async function handleRegister() {
 
 .bottom-link a:hover {
   text-decoration: underline;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--toss-gray-400);
+  font-size: 12px;
+}
+
+.input-hint {
+  font-size: 12px;
+  color: var(--toss-gray-400);
+  margin-top: 6px;
+  padding-left: 2px;
 }
 </style>
