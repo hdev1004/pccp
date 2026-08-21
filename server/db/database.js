@@ -214,7 +214,73 @@ async function initDatabase() {
           [testerId]
         );
 
-        console.log('테스터 샘플 데이터 시드 완료 (풀이 8개, AI문제 2개)');
+        // 샘플 퀴즈 1주차 (group_id=NULL, tester 전용)
+        const sampleQuestions = [
+          {
+            id: 1, type: 'choice',
+            code: 'def find(arr, target):\n    for i in range(len(arr)):\n        if arr[i] == target:\n            return i\n    return -1',
+            options: ['O(1)', 'O(n)', 'O(n²)', 'O(log n)'],
+            answer: 1,
+            explanation: '배열을 처음부터 끝까지 순회하므로 O(n)입니다.'
+          },
+          {
+            id: 2, type: 'choice',
+            code: 'def check(arr):\n    return arr[0] + arr[-1]',
+            options: ['O(1)', 'O(n)', 'O(n²)', 'O(log n)'],
+            answer: 0,
+            explanation: '인덱스로 직접 접근하므로 O(1)입니다.'
+          },
+          {
+            id: 3, type: 'choice',
+            code: 'def bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(n-1-i):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]',
+            options: ['O(n)', 'O(n log n)', 'O(n²)', 'O(n³)'],
+            answer: 2,
+            explanation: '이중 반복문이 n번씩 도므로 O(n²)입니다.'
+          },
+          {
+            id: 4, type: 'choice',
+            code: 'def binary_search(arr, target):\n    lo, hi = 0, len(arr)-1\n    while lo <= hi:\n        mid = (lo+hi)//2\n        if arr[mid] == target: return mid\n        elif arr[mid] < target: lo = mid+1\n        else: hi = mid-1\n    return -1',
+            options: ['O(1)', 'O(n)', 'O(n²)', 'O(log n)'],
+            answer: 3,
+            explanation: '매번 탐색 범위가 절반으로 줄어들므로 O(log n)입니다.'
+          },
+          {
+            id: 5, type: 'choice',
+            code: 'def has_dup(arr):\n    return len(arr) != len(set(arr))',
+            options: ['O(1)', 'O(n)', 'O(n²)', 'O(n log n)'],
+            answer: 1,
+            explanation: 'set 변환이 O(n), len 비교가 O(1)이므로 전체 O(n)입니다.'
+          },
+          {
+            id: 6, type: 'choice',
+            code: 'arr = [1,2,3,4,5]\nresult = sorted(arr)',
+            options: ['O(1)', 'O(n)', 'O(n²)', 'O(n log n)'],
+            answer: 3,
+            explanation: 'Python의 sorted()는 Timsort를 사용하며 O(n log n)입니다.'
+          },
+          {
+            id: 7, type: 'short_answer',
+            code: 'def count(arr):\n    freq = {}\n    for x in arr:\n        freq[x] = freq.get(x, 0) + 1\n    return freq',
+            answer: 'O(n)',
+            explanation: '배열을 한 번 순회하며 딕셔너리에 삽입(O(1))하므로 O(n)입니다.'
+          },
+          {
+            id: 8, type: 'descriptive',
+            code: 'def two_sum(arr, target):\n    seen = set()\n    for x in arr:\n        if target - x in seen:\n            return True\n        seen.add(x)\n    return False',
+            complexity: 'O(n)',
+            answer: '배열을 한 번 순회(O(n))하면서 set의 in 연산(O(1))과 add(O(1))만 사용하므로 전체 시간복잡도는 O(n)입니다.',
+            grading_keywords: ['한 번 순회', 'set 조회 O(1)', '반복문 n번'],
+            explanation: 'set을 활용해 이중 반복 없이 O(n)에 해결하는 투 포인터 대안입니다.'
+          }
+        ];
+
+        await client.query(
+          `INSERT INTO ${schema}.weekly_quizzes (week, questions, group_id)
+           VALUES (1, $1, NULL)`,
+          [JSON.stringify(sampleQuestions)]
+        );
+
+        console.log('테스터 샘플 데이터 시드 완료 (풀이 8개, AI문제 2개, 퀴즈 1주차)');
       }
     }
 
